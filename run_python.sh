@@ -1,0 +1,1 @@
+python ./examples/ssd/forward-c.py /home/leejohnnie/code/MobileNetv2-SSDLite/ssdlite/deploy.prototxt /home/leejohnnie/code/MobileNetv2-SSDLite/ssdlite/deploy.caffemodel examples/images/300.jpg 300,300 detection_out

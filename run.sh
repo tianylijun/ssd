@@ -1,0 +1,1 @@
+sudo make all && ./build/examples/ssd/ssd_detect.bin /home/leejohnnie/code/MobileNetv2-SSDLite/ssdlite/deploy.prototxt /home/leejohnnie/code/MobileNetv2-SSDLite/ssdlite/deploy.caffemodel examples/one.txt -confidence_threshold 0.3

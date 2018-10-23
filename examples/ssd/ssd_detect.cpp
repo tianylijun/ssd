@@ -29,6 +29,100 @@
 #ifdef USE_OPENCV
 using namespace caffe;  // NOLINT(build/namespaces)
 
+const char *plabel[] = {
+"background",
+"person",
+"bicycle",
+"car",
+"motorcycle",
+"airplane",
+"bus",
+"train",
+"truck",
+"boat",
+"traffic light",
+"fire hydrant",
+"N/A",
+"stop sign",
+"parking meter",
+"bench",
+"bird",
+"cat",
+"dog",
+"horse",
+"sheep",
+"cow",
+"elephant",
+"bear",
+"zebra",
+"giraffe",
+"N/A",
+"backpack",
+"umbrella",
+"N/A",
+"N/A",
+"handbag",
+"tie",
+"suitcase",
+"frisbee",
+"skis",
+"snowboard",
+"sports ball",
+"kite",
+"baseball bat",
+"baseball glove",
+"skateboard",
+"surfboard",
+"tennis racket",
+"bottle",
+"N/A",
+"wine glass",
+"cup",
+"fork",
+"knife",
+"spoon",
+"bowl",
+"banana",
+"apple",
+"sandwich",
+"orange",
+"broccoli",
+"carrot",
+"hot dog",
+"pizza",
+"donut",
+"cake",
+"chair",
+"couch",
+"potted plant",
+"bed",
+"N/A",
+"dining table",
+"N/A",
+"N/A",
+"toilet",
+"N/A",
+"tv",
+"laptop",
+"mouse",
+"remote",
+"keyboard",
+"cell phone",
+"microwave",
+"oven",
+"toaster",
+"sink",
+"refrigerator",
+"N/A",
+"book",
+"clock",
+"vase",
+"scissors",
+"teddy bear",
+"hair drier",
+"toothbrush"
+};
+
 class Detector {
  public:
   Detector(const string& model_file,
@@ -75,7 +169,7 @@ Detector::Detector(const string& model_file,
   CHECK(num_channels_ == 3 || num_channels_ == 1)
     << "Input layer should have 1 or 3 channels.";
   input_geometry_ = cv::Size(input_layer->width(), input_layer->height());
-
+  printf("input_layer: [%d %d]\n", input_geometry_.width, input_geometry_.height);
   /* Load the binaryproto mean file. */
   SetMean(mean_file, mean_value);
 }
@@ -95,8 +189,29 @@ std::vector<vector<float> > Detector::Detect(const cv::Mat& img) {
   net_->Forward();
 
   /* Copy the output layer to a std::vector */
+  shared_ptr<Blob<float> > result_blob_tmp;
   Blob<float>* result_blob = net_->output_blobs()[0];
+  #if 0
+  result_blob_tmp = net_->blob_by_name("layer_19_2_5_mbox_loc/depthwise");
+  printf("blob: %s, [%d %d %d]\n", "layer_19_2_5_mbox_loc/depthwise", result_blob_tmp->width(), result_blob_tmp->height(), result_blob_tmp->channels());
+
+  result_blob_tmp = net_->blob_by_name("layer_19_2_5_mbox_conf/depthwise");
+  printf("blob: %s, [%d %d %d]\n", "layer_19_2_5_mbox_conf/depthwise", result_blob_tmp->width(), result_blob_tmp->height(), result_blob_tmp->channels());
+
+  result_blob_tmp = net_->blob_by_name("layer_19_2_5_mbox_priorbox");
+  printf("blob: %s, [%d %d %d]\n", "layer_19_2_5_mbox_priorbox", result_blob_tmp->width(), result_blob_tmp->height(), result_blob_tmp->channels());  
+  #endif
   const float* result = result_blob->cpu_data();
+  
+  printf("\n[%d %d %d]\n", result_blob->channels(), result_blob->height(), result_blob->width());
+  for(int k = 0; k < 7*result_blob->height(); k++)
+  {
+    if ((0 == k %7) && (0 != k))
+        printf("\n");
+    printf("%f ", result[k]);
+  }
+  printf("\n");
+
   const int num_det = result_blob->height();
   vector<vector<float> > detections;
   for (int k = 0; k < num_det; ++k) {
@@ -215,8 +330,12 @@ void Detector::Preprocess(const cv::Mat& img,
   else
     sample_resized.convertTo(sample_float, CV_32FC1);
 
+
+//float *pData = (float *)sample_float.data;
+printf("%f %f %f\n", sample_float.at<cv::Vec3f>(0,0)[0], sample_float.at<cv::Vec3f>(0,0)[1], sample_float.at<cv::Vec3f>(0,0)[2]);
   cv::Mat sample_normalized;
-  cv::subtract(sample_float, mean_, sample_normalized);
+  cv::subtract(sample_float, 127.5, sample_normalized);
+  sample_normalized.convertTo(sample_normalized, CV_32F, 1.0 / 127.5, 0.0);
 
   /* This operation will write the separate BGR planes directly to the
    * input layer of the network because it is wrapped by the cv::Mat
@@ -230,7 +349,7 @@ void Detector::Preprocess(const cv::Mat& img,
 
 DEFINE_string(mean_file, "",
     "The mean file used to subtract from the input image.");
-DEFINE_string(mean_value, "104,117,123",
+DEFINE_string(mean_value, "0,0,0",
     "If specified, can be one value or can be same as image channels"
     " - would subtract from the corresponding channel). Separated by ','."
     "Either mean_file or mean_value should be provided, not both.");
@@ -238,13 +357,13 @@ DEFINE_string(file_type, "image",
     "The file type in the list_file. Currently support image and video.");
 DEFINE_string(out_file, "",
     "If provided, store the detection results in the out_file.");
-DEFINE_double(confidence_threshold, 0.01,
+DEFINE_double(confidence_threshold, 0.35,
     "Only store detections with score higher than the threshold.");
 
 int main(int argc, char** argv) {
   ::google::InitGoogleLogging(argv[0]);
   // Print output to stderr (while still logging)
-  FLAGS_alsologtostderr = 1;
+  FLAGS_alsologtostderr = 0;
 
 #ifndef GFLAGS_GFLAGS_H_
   namespace gflags = google;
@@ -264,7 +383,6 @@ int main(int argc, char** argv) {
   const string& weights_file = argv[2];
   const string& mean_file = FLAGS_mean_file;
   const string& mean_value = FLAGS_mean_value;
-  const string& file_type = FLAGS_file_type;
   const string& out_file = FLAGS_out_file;
   const float confidence_threshold = FLAGS_confidence_threshold;
 
@@ -286,68 +404,79 @@ int main(int argc, char** argv) {
   std::ifstream infile(argv[3]);
   std::string file;
   while (infile >> file) {
-    if (file_type == "image") {
       cv::Mat img = cv::imread(file, -1);
+      cv::resize(img, img, cv::Size(300, 300));
+      
+      printf("%d %d %d\n", img.at<cv::Vec3b>(0,0)[0], img.at<cv::Vec3b>(0,0)[1], img.at<cv::Vec3b>(0,0)[2]);
+      cv::cvtColor(img, img, CV_BGR2RGB);
+      printf("mean_file: %s, mean_value: %s, confidence_threshold: %f [%d %d]\n", mean_file.c_str(), mean_value.c_str(), confidence_threshold, img.cols, img.rows);
+
       CHECK(!img.empty()) << "Unable to decode image " << file;
       std::vector<vector<float> > detections = detector.Detect(img);
 
       /* Print the detection results. */
+      printf("[id, label, score, xmin, ymin, xmax, ymax]\nDetection cnt: %u\n", (uint32_t)detections.size());
+
       for (int i = 0; i < detections.size(); ++i) {
         const vector<float>& d = detections[i];
         // Detection format: [image_id, label, score, xmin, ymin, xmax, ymax].
         CHECK_EQ(d.size(), 7);
         const float score = d[2];
+        //printf("score: %f\n", score);
         if (score >= confidence_threshold) {
-          out << file << " ";
+
+          out << "[" << i << "] ";
+          out << d[1] << " ";
+          out << score << " ";
+          out << d[3] << " ";
+          out << d[4] << " ";
+          out << d[5] << " ";
+          out << d[6] << std::endl;
+#if 0
+          out << "[" << i << "] ";
           out << static_cast<int>(d[1]) << " ";
           out << score << " ";
           out << static_cast<int>(d[3] * img.cols) << " ";
           out << static_cast<int>(d[4] * img.rows) << " ";
           out << static_cast<int>(d[5] * img.cols) << " ";
           out << static_cast<int>(d[6] * img.rows) << std::endl;
-        }
-      }
-    } else if (file_type == "video") {
-      cv::VideoCapture cap(file);
-      if (!cap.isOpened()) {
-        LOG(FATAL) << "Failed to open video: " << file;
-      }
-      cv::Mat img;
-      int frame_count = 0;
-      while (true) {
-        bool success = cap.read(img);
-        if (!success) {
-          LOG(INFO) << "Process " << frame_count << " frames from " << file;
-          break;
-        }
-        CHECK(!img.empty()) << "Error when read frame";
-        std::vector<vector<float> > detections = detector.Detect(img);
+#endif
+          int xoffset = 0, yoffset = 0;
 
-        /* Print the detection results. */
-        for (int i = 0; i < detections.size(); ++i) {
-          const vector<float>& d = detections[i];
-          // Detection format: [image_id, label, score, xmin, ymin, xmax, ymax].
-          CHECK_EQ(d.size(), 7);
-          const float score = d[2];
-          if (score >= confidence_threshold) {
-            out << file << "_";
-            out << std::setfill('0') << std::setw(6) << frame_count << " ";
-            out << static_cast<int>(d[1]) << " ";
-            out << score << " ";
-            out << static_cast<int>(d[3] * img.cols) << " ";
-            out << static_cast<int>(d[4] * img.rows) << " ";
-            out << static_cast<int>(d[5] * img.cols) << " ";
-            out << static_cast<int>(d[6] * img.rows) << std::endl;
-          }
+#if 0
+          xoffset = (static_cast<int>(d[5] * img.cols)- static_cast<int>(d[3] * img.cols)) / 10;
+          yoffset = (static_cast<int>(d[6] * img.rows)- static_cast<int>(d[4] * img.rows)) / 10;
+#endif
+          cv::Rect rect = cv::Rect(static_cast<int>(d[3] * img.cols) - xoffset, 
+                                   static_cast<int>(d[4] * img.rows) - yoffset, 
+                                   static_cast<int>(d[5] * img.cols)- static_cast<int>(d[3] * img.cols), 
+                                   static_cast<int>(d[6] * img.rows) - static_cast<int>(d[4] * img.rows));
+          cv::rectangle(img, rect, cv::Scalar(0, 255, 0));
+          
+			char text[256];
+			sprintf(text, "%d, %s %.3f", static_cast<int>(d[1]), plabel[static_cast<int>(d[1])], score);
+
+			int baseLine = 0;
+			cv::Size label_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
+
+			int x = static_cast<int>(d[3] * img.cols) - xoffset;
+			int y = static_cast<int>(d[4] * img.rows) - yoffset - label_size.height - baseLine;
+			if (y < 0)
+				y = 0;
+			if (x + label_size.width > img.cols)
+				x = img.cols - label_size.width;
+
+			cv::rectangle(img, cv::Rect(cv::Point(x, y),
+						  cv::Size(label_size.width, label_size.height + baseLine)),
+						  cv::Scalar(255, 255, 255), CV_FILLED);
+
+			cv::putText(img, text, cv::Point(x, y + label_size.height),
+						cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255));
         }
-        ++frame_count;
       }
-      if (cap.isOpened()) {
-        cap.release();
-      }
-    } else {
-      LOG(FATAL) << "Unknown file_type: " << file_type;
-    }
+      imshow("d", img);
+      cv::waitKey();
+      imwrite("/home/leejohnnie/code/ssd/caffe/examples/images/ssd.jpg", img);
   }
   return 0;
 }
