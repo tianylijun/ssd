@@ -332,7 +332,7 @@ void Detector::Preprocess(const cv::Mat& img,
 
 
 //float *pData = (float *)sample_float.data;
-printf("%f %f %f\n", sample_float.at<cv::Vec3f>(0,0)[0], sample_float.at<cv::Vec3f>(0,0)[1], sample_float.at<cv::Vec3f>(0,0)[2]);
+//printf("%f %f %f\n", sample_float.at<cv::Vec3f>(0,0)[0], sample_float.at<cv::Vec3f>(0,0)[1], sample_float.at<cv::Vec3f>(0,0)[2]);
   cv::Mat sample_normalized;
   cv::subtract(sample_float, 127.5, sample_normalized);
   sample_normalized.convertTo(sample_normalized, CV_32F, 1.0 / 127.5, 0.0);
@@ -359,6 +359,55 @@ DEFINE_string(out_file, "",
     "If provided, store the detection results in the out_file.");
 DEFINE_double(confidence_threshold, 0.35,
     "Only store detections with score higher than the threshold.");
+
+static void writeFileFloat(const char *pFname, float *pData, unsigned size)
+{
+    FILE* pfile = fopen(pFname, "wb");
+    if (!pfile)
+    {
+        printf("pFileOut open error \n");
+        exit(-1);
+    }
+    for(int i =0; i < size; i++)
+    {
+        if ((0 != i)&& (0 == (i%16)))
+            fprintf(pfile, "\n");
+        fprintf(pfile, "%10.6f ", pData[i]);
+    }
+    fclose(pfile);
+}
+
+const char format_head[]=
+	"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\
+<annotation>\n\
+   <folder>out</folder>\n\
+   <filename>NA</filename>\n\
+   <path>NA</path>\n\
+   <source>\n\
+	  <database>Unknown</database>\n\
+   </source>\n\
+   <size>\n\
+	  <width>%d</width>\n\
+	  <height>%d</height>\n\
+	  <depth>3</depth>\n\
+   </size>\n\
+   <segmented>0</segmented>\n";
+
+const char format_box[]=
+"   <object>\n\
+	  <name>alien</name>\n\
+	  <pose>Unspecified</pose>\n\
+	  <truncated>0</truncated>\n\
+	  <difficult>0</difficult>\n\
+	  <bndbox>\n\
+		 <xmin>%d</xmin>\n\
+		 <ymin>%d</ymin>\n\
+		 <xmax>%d</xmax>\n\
+		 <ymax>%d</ymax>\n\
+	  </bndbox>\n\
+   </object>\n";
+
+const char format_end[]="</annotation>";
 
 int main(int argc, char** argv) {
   ::google::InitGoogleLogging(argv[0]);
@@ -399,32 +448,76 @@ int main(int argc, char** argv) {
     }
   }
   std::ostream out(buf);
-
-  // Process image one by one.
+  #if 1
+	FILE* pfile = fopen("yiming/dataset/result.txt", "wb");
+	if (!pfile)
+	{
+		printf("pFileOut open error \n");
+		exit(-1);
+	}
+	FILE* pfileSize = fopen("/home/leejohnnie/code/chuanqi305/ssd/yiming/voc_test_1000/size.txt", "wb");
+	if (!pfile)
+	{
+		printf("pFileOut open error \n");
+		exit(-1);
+	}
+	#endif
+// Process image one by one.
   std::ifstream infile(argv[3]);
   std::string file;
   while (infile >> file) {
       cv::Mat img = cv::imread(file, -1);
+#if 0
+      cv::Mat imgResize;
+      cv::resize(img, imgResize, cv::Size(300, 300));
+
+	  fprintf(pfileSize, "%d,%d\n", img.cols, img.rows);
+	  fflush(pfileSize);
+
+      char buff[256];
+      sprintf(buff, "yiming/voc_test_1000%s", strrchr(file.c_str(), '/'));
+      imwrite(buff, imgResize);
+#endif
+
+#if 1
+      //cv::Mat imgSize;
       cv::resize(img, img, cv::Size(300, 300));
-      
-      printf("%d %d %d\n", img.at<cv::Vec3b>(0,0)[0], img.at<cv::Vec3b>(0,0)[1], img.at<cv::Vec3b>(0,0)[2]);
+      //printf("\n\n\n%d %d %d\n", img.at<cv::Vec3b>(0,0)[0], img.at<cv::Vec3b>(0,0)[1], img.at<cv::Vec3b>(0,0)[2]);
       cv::cvtColor(img, img, CV_BGR2RGB);
-      printf("mean_file: %s, mean_value: %s, confidence_threshold: %f [%d %d]\n", mean_file.c_str(), mean_value.c_str(), confidence_threshold, img.cols, img.rows);
+      //printf("mean_file: %s, mean_value: %s, confidence_threshold: %f [%d %d]\n", mean_file.c_str(), mean_value.c_str(), confidence_threshold, img.cols, img.rows);
 
       CHECK(!img.empty()) << "Unable to decode image " << file;
       std::vector<vector<float> > detections = detector.Detect(img);
 
       /* Print the detection results. */
-      printf("[id, label, score, xmin, ymin, xmax, ymax]\nDetection cnt: %u\n", (uint32_t)detections.size());
-
+      //printf("[id, label, score, xmin, ymin, xstd::max, ystd::max]\nDetection cnt: %u\n", (uint32_t)detections.size());
+		
+			char xmlname[1024];
+			char buff[1024];
+			strcpy(xmlname, strrchr(file.c_str(), '/')+1);
+			*strchr(xmlname, '.') = 0;
+			sprintf(buff, "yiming/caffe_result/%s.xml", xmlname);
+			printf("xml: %s\n", buff);
+			FILE *fpxml = NULL;
+			if(NULL == (fpxml = fopen(buff,"ab")))
+			{
+				printf("open output error!\n");
+				return -3;
+			}
+        fprintf(fpxml, format_head, img.cols, img.rows);
+        
       for (int i = 0; i < detections.size(); ++i) {
         const vector<float>& d = detections[i];
-        // Detection format: [image_id, label, score, xmin, ymin, xmax, ymax].
+        // Detection format: [image_id, label, score, xmin, ymin, xstd::max, ystd::max].
         CHECK_EQ(d.size(), 7);
         const float score = d[2];
         //printf("score: %f\n", score);
+
         if (score >= confidence_threshold) {
 
+          //fprintf(pfile, "%s %f %f %f %f %f %f\n", strrchr(file.c_str(), '/')+1, d[1], d[2], d[3], d[4], d[5], d[6]);
+          //fflush(pfile);
+#if 0
           out << "[" << i << "] ";
           out << d[1] << " ";
           out << score << " ";
@@ -432,6 +525,8 @@ int main(int argc, char** argv) {
           out << d[4] << " ";
           out << d[5] << " ";
           out << d[6] << std::endl;
+#endif
+
 #if 0
           out << "[" << i << "] ";
           out << static_cast<int>(d[1]) << " ";
@@ -447,10 +542,25 @@ int main(int argc, char** argv) {
           xoffset = (static_cast<int>(d[5] * img.cols)- static_cast<int>(d[3] * img.cols)) / 10;
           yoffset = (static_cast<int>(d[6] * img.rows)- static_cast<int>(d[4] * img.rows)) / 10;
 #endif
-          cv::Rect rect = cv::Rect(static_cast<int>(d[3] * img.cols) - xoffset, 
-                                   static_cast<int>(d[4] * img.rows) - yoffset, 
-                                   static_cast<int>(d[5] * img.cols)- static_cast<int>(d[3] * img.cols), 
-                                   static_cast<int>(d[6] * img.rows) - static_cast<int>(d[4] * img.rows));
+
+#if 1
+            int topx, topy, bottomx,bottomy;
+            topx = std::max(static_cast<int>(d[3] * img.cols), 0);
+            topx = std::min(topx, img.cols);
+
+            topy = std::max(static_cast<int>(d[4] * img.rows), 0);
+            topy = std::min(topy, img.rows);
+
+            bottomx = std::max(static_cast<int>(d[5] * img.cols), 0);
+            bottomx = std::min(bottomx, img.cols);
+
+            bottomy = std::max(static_cast<int>(d[6] * img.rows), 0);
+            bottomy = std::min(bottomy, img.rows);
+
+          cv::Rect rect = cv::Rect(topx, 
+                                   topy, 
+                                   bottomx- topx, 
+                                   bottomy - topy);
           cv::rectangle(img, rect, cv::Scalar(0, 255, 0));
           
 			char text[256];
@@ -472,12 +582,43 @@ int main(int argc, char** argv) {
 
 			cv::putText(img, text, cv::Point(x, y + label_size.height),
 						cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255));
+#endif
+{
+            int topx, topy, bottomx,bottomy;
+            topx = std::max(static_cast<int>(d[3] * img.cols), 0);
+            topx = std::min(topx, img.cols);
+
+            topy = std::max(static_cast<int>(d[4] * img.rows), 0);
+            topy = std::min(topy, img.rows);
+
+            bottomx = std::max(static_cast<int>(d[5] * img.cols), 0);
+            bottomx = std::min(bottomx, img.cols);
+
+            bottomy = std::max(static_cast<int>(d[6] * img.rows), 0);
+            bottomy = std::min(bottomy, img.rows);
+
+			fprintf(fpxml, format_box, 
+			       topx,
+			       topy,
+			       bottomx,
+			       bottomy
+			       );
+}
+
         }
+
+        //getchar();
       }
+			fprintf(fpxml, format_end);
+		    fclose(fpxml);
+#endif
       imshow("d", img);
       cv::waitKey();
-      imwrite("/home/leejohnnie/code/ssd/caffe/examples/images/ssd.jpg", img);
+      
+      //imwrite("/home/leejohnnie/code/ssd/caffe/examples/images/ssd.jpg", img);
   }
+  fclose(pfile);
+  fclose(pfileSize);
   return 0;
 }
 #else

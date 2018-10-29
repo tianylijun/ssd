@@ -45,7 +45,7 @@ if True:
     sz_w = width
     sz_h = heigh
 
-  #oriImg=cv2.resize(oriImg, (sz_w, sz_h))
+  oriImg=cv2.resize(oriImg, (sz_w, sz_h))
   oriImg=(oriImg-127.5)/127.5;
 
   im_blob = np.zeros((1, sz_h, sz_w, 3),
@@ -63,8 +63,8 @@ if True:
   if net.blobs.has_key(outname):
 	outblob = net.blobs[outname]
 	print outblob.data.shape
-	print outblob.data.ravel()
-	#for d in outblob.data:
+	print outblob.data.ravel()[0:8]
+	#for d in outblob.data.arange(1,8):
 	#	print d[:]
 	print outblob.data.shape
   else:
