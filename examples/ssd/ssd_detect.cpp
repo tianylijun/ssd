@@ -13,11 +13,9 @@
 //    folder/video2.mp4
 //
 #include <caffe/caffe.hpp>
-#ifdef USE_OPENCV
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-#endif  // USE_OPENCV
 #include <algorithm>
 #include <iomanip>
 #include <iosfwd>
@@ -26,7 +24,6 @@
 #include <utility>
 #include <vector>
 
-#ifdef USE_OPENCV
 using namespace caffe;  // NOLINT(build/namespaces)
 
 const char *plabel[] = {
@@ -191,7 +188,8 @@ std::vector<vector<float> > Detector::Detect(const cv::Mat& img) {
   /* Copy the output layer to a std::vector */
   shared_ptr<Blob<float> > result_blob_tmp;
   Blob<float>* result_blob = net_->output_blobs()[0];
-  #if 0
+
+#if 0
   result_blob_tmp = net_->blob_by_name("layer_19_2_5_mbox_loc/depthwise");
   printf("blob: %s, [%d %d %d]\n", "layer_19_2_5_mbox_loc/depthwise", result_blob_tmp->width(), result_blob_tmp->height(), result_blob_tmp->channels());
 
@@ -200,9 +198,11 @@ std::vector<vector<float> > Detector::Detect(const cv::Mat& img) {
 
   result_blob_tmp = net_->blob_by_name("layer_19_2_5_mbox_priorbox");
   printf("blob: %s, [%d %d %d]\n", "layer_19_2_5_mbox_priorbox", result_blob_tmp->width(), result_blob_tmp->height(), result_blob_tmp->channels());  
-  #endif
+#endif
+
   const float* result = result_blob->cpu_data();
-  
+
+#if 0
   printf("\n[%d %d %d]\n", result_blob->channels(), result_blob->height(), result_blob->width());
   for(int k = 0; k < 7*result_blob->height(); k++)
   {
@@ -211,6 +211,7 @@ std::vector<vector<float> > Detector::Detect(const cv::Mat& img) {
     printf("%f ", result[k]);
   }
   printf("\n");
+#endif
 
   const int num_det = result_blob->height();
   vector<vector<float> > detections;
@@ -330,7 +331,6 @@ void Detector::Preprocess(const cv::Mat& img,
   else
     sample_resized.convertTo(sample_float, CV_32FC1);
 
-
 //float *pData = (float *)sample_float.data;
 //printf("%f %f %f\n", sample_float.at<cv::Vec3f>(0,0)[0], sample_float.at<cv::Vec3f>(0,0)[1], sample_float.at<cv::Vec3f>(0,0)[2]);
   cv::Mat sample_normalized;
@@ -377,7 +377,7 @@ static void writeFileFloat(const char *pFname, float *pData, unsigned size)
     fclose(pfile);
 }
 
-const char format_head[]=
+static const char format_head[]=
 	"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\
 <annotation>\n\
    <folder>out</folder>\n\
@@ -393,7 +393,7 @@ const char format_head[]=
    </size>\n\
    <segmented>0</segmented>\n";
 
-const char format_box[]=
+static const char format_box[]=
 "   <object>\n\
 	  <name>alien</name>\n\
 	  <pose>Unspecified</pose>\n\
@@ -407,7 +407,7 @@ const char format_box[]=
 	  </bndbox>\n\
    </object>\n";
 
-const char format_end[]="</annotation>";
+static const char format_end[]="</annotation>";
 
 int main(int argc, char** argv) {
   ::google::InitGoogleLogging(argv[0]);
@@ -448,64 +448,62 @@ int main(int argc, char** argv) {
     }
   }
   std::ostream out(buf);
-  #if 1
-	FILE* pfile = fopen("yiming/dataset/result.txt", "wb");
+  #define RESULT_PATH "/media/psf/Home/share/yiming_result"
+
+	/* float result */
+	FILE* pfile = fopen(RESULT_PATH"/float_result.txt", "wb");
 	if (!pfile)
 	{
-		printf("pFileOut open error \n");
+		printf("float_result open error \n");
 		exit(-1);
 	}
-	FILE* pfileSize = fopen("/home/leejohnnie/code/chuanqi305/ssd/yiming/voc_test_1000/size.txt", "wb");
-	if (!pfile)
+	/* pic org size */
+	FILE* pfileSize = fopen(RESULT_PATH"/orgsize.txt", "wb");
+	if (!pfileSize)
 	{
-		printf("pFileOut open error \n");
+		printf("orgsize open error \n");
 		exit(-1);
 	}
-	#endif
-// Process image one by one.
+
+  // Process image one by one.
   std::ifstream infile(argv[3]);
   std::string file;
   while (infile >> file) {
       cv::Mat img = cv::imread(file, -1);
-#if 0
-      cv::Mat imgResize;
-      cv::resize(img, imgResize, cv::Size(300, 300));
 
 	  fprintf(pfileSize, "%d,%d\n", img.cols, img.rows);
 	  fflush(pfileSize);
 
-      char buff[256];
-      sprintf(buff, "yiming/voc_test_1000%s", strrchr(file.c_str(), '/'));
-      imwrite(buff, imgResize);
-#endif
+      cv::Mat imgResize;
+      cv::resize(img, imgResize, cv::Size(300, 300));
+      {
+          char buff[256];
+          sprintf(buff, RESULT_PATH"/img/%s", strrchr(file.c_str(), '/')+1);
+          imwrite(buff, imgResize); 
+      }
 
-#if 1
-      //cv::Mat imgSize;
-      cv::resize(img, img, cv::Size(300, 300));
       //printf("\n\n\n%d %d %d\n", img.at<cv::Vec3b>(0,0)[0], img.at<cv::Vec3b>(0,0)[1], img.at<cv::Vec3b>(0,0)[2]);
-      cv::cvtColor(img, img, CV_BGR2RGB);
+      cv::cvtColor(imgResize, imgResize, CV_BGR2RGB);
       //printf("mean_file: %s, mean_value: %s, confidence_threshold: %f [%d %d]\n", mean_file.c_str(), mean_value.c_str(), confidence_threshold, img.cols, img.rows);
 
-      CHECK(!img.empty()) << "Unable to decode image " << file;
-      std::vector<vector<float> > detections = detector.Detect(img);
-
-      /* Print the detection results. */
-      //printf("[id, label, score, xmin, ymin, xstd::max, ystd::max]\nDetection cnt: %u\n", (uint32_t)detections.size());
+      CHECK(!imgResize.empty()) << "Unable to decode image " << file;
+      std::vector<vector<float> > detections = detector.Detect(imgResize);
+      /* Print the detection results [id, label, score, xmin, ymin, xmax, ymax]. */
 		
-			char xmlname[1024];
-			char buff[1024];
-			strcpy(xmlname, strrchr(file.c_str(), '/')+1);
-			*strchr(xmlname, '.') = 0;
-			sprintf(buff, "yiming/caffe_result/%s.xml", xmlname);
-			printf("xml: %s\n", buff);
-			FILE *fpxml = NULL;
-			if(NULL == (fpxml = fopen(buff,"ab")))
-			{
-				printf("open output error!\n");
-				return -3;
-			}
-        fprintf(fpxml, format_head, img.cols, img.rows);
-        
+		char xmlname[1024];
+		char buff[1024];
+		strcpy(xmlname, strrchr(file.c_str(), '/')+1);
+		*strchr(xmlname, '.') = 0;
+		sprintf(buff, RESULT_PATH"/caffe_result/%s.xml", xmlname);
+		printf("xml: %s\n", buff);
+		FILE *fpxml = NULL;
+		if(NULL == (fpxml = fopen(buff,"wb")))
+		{
+			printf("open output error!\n");
+			return -3;
+		}
+		fprintf(fpxml, format_head, img.cols, img.rows);
+
       for (int i = 0; i < detections.size(); ++i) {
         const vector<float>& d = detections[i];
         // Detection format: [image_id, label, score, xmin, ymin, xstd::max, ystd::max].
@@ -513,116 +511,67 @@ int main(int argc, char** argv) {
         const float score = d[2];
         //printf("score: %f\n", score);
 
-        if (score >= confidence_threshold) {
+		fprintf(pfile, "%s %f %f %f %f %f %f\n", strrchr(file.c_str(), '/')+1, d[1], d[2], d[3], d[4], d[5], d[6]);
+		fflush(pfile);
 
-          //fprintf(pfile, "%s %f %f %f %f %f %f\n", strrchr(file.c_str(), '/')+1, d[1], d[2], d[3], d[4], d[5], d[6]);
-          //fflush(pfile);
-#if 0
-          out << "[" << i << "] ";
-          out << d[1] << " ";
-          out << score << " ";
-          out << d[3] << " ";
-          out << d[4] << " ";
-          out << d[5] << " ";
-          out << d[6] << std::endl;
-#endif
+        if (score < confidence_threshold)
+            continue;
 
-#if 0
-          out << "[" << i << "] ";
-          out << static_cast<int>(d[1]) << " ";
-          out << score << " ";
-          out << static_cast<int>(d[3] * img.cols) << " ";
-          out << static_cast<int>(d[4] * img.rows) << " ";
-          out << static_cast<int>(d[5] * img.cols) << " ";
-          out << static_cast<int>(d[6] * img.rows) << std::endl;
-#endif
-          int xoffset = 0, yoffset = 0;
-
-#if 0
-          xoffset = (static_cast<int>(d[5] * img.cols)- static_cast<int>(d[3] * img.cols)) / 10;
-          yoffset = (static_cast<int>(d[6] * img.rows)- static_cast<int>(d[4] * img.rows)) / 10;
-#endif
-
+        {
 #if 1
-            int topx, topy, bottomx,bottomy;
-            topx = std::max(static_cast<int>(d[3] * img.cols), 0);
-            topx = std::min(topx, img.cols);
+			out << "[" << i << "] ";
+			out << d[1] << " ";
+			out << score << " ";
+			out << d[3] << " ";
+			out << d[4] << " ";
+			out << d[5] << " ";
+			out << d[6] << std::endl;
+			out << "[" << i << "] ";
+			out << static_cast<int>(d[1]) << " ";
+			out << score << " ";
+			out << static_cast<int>(d[3] * img.cols) << " ";
+			out << static_cast<int>(d[4] * img.rows) << " ";
+			out << static_cast<int>(d[5] * img.cols) << " ";
+			out << static_cast<int>(d[6] * img.rows) << std::endl;
 
-            topy = std::max(static_cast<int>(d[4] * img.rows), 0);
-            topy = std::min(topy, img.rows);
-
-            bottomx = std::max(static_cast<int>(d[5] * img.cols), 0);
-            bottomx = std::min(bottomx, img.cols);
-
-            bottomy = std::max(static_cast<int>(d[6] * img.rows), 0);
-            bottomy = std::min(bottomy, img.rows);
-
-          cv::Rect rect = cv::Rect(topx, 
-                                   topy, 
-                                   bottomx- topx, 
-                                   bottomy - topy);
-          cv::rectangle(img, rect, cv::Scalar(0, 255, 0));
-          
+			int topx, topy, bottomx,bottomy;
+			topx = std::max(static_cast<int>(d[3] * img.cols), 1);
+			topx = std::min(topx, img.cols-1);
+			topy = std::max(static_cast<int>(d[4] * img.rows), 1);
+			topy = std::min(topy, img.rows-1);
+			bottomx = std::max(static_cast<int>(d[5] * img.cols), 1);
+			bottomx = std::min(bottomx, img.cols-1);
+			bottomy = std::max(static_cast<int>(d[6] * img.rows), 1);
+			bottomy = std::min(bottomy, img.rows-1);
+            /* draw rect */
+			cv::Rect rect = cv::Rect(topx, topy, bottomx - topx, bottomy - topy);
+			cv::rectangle(img, rect, cv::Scalar(0, 255, 0));
+            /* draw text */
 			char text[256];
 			sprintf(text, "%d, %s %.3f", static_cast<int>(d[1]), plabel[static_cast<int>(d[1])], score);
-
 			int baseLine = 0;
 			cv::Size label_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
-
-			int x = static_cast<int>(d[3] * img.cols) - xoffset;
-			int y = static_cast<int>(d[4] * img.rows) - yoffset - label_size.height - baseLine;
-			if (y < 0)
-				y = 0;
-			if (x + label_size.width > img.cols)
-				x = img.cols - label_size.width;
-
+			int x = static_cast<int>(d[3] * img.cols);
+			int y = static_cast<int>(d[4] * img.rows) - label_size.height - baseLine;
+			if (y < 0) y = 0;
+			if (x + label_size.width > img.cols) x = img.cols - label_size.width;
 			cv::rectangle(img, cv::Rect(cv::Point(x, y),
 						  cv::Size(label_size.width, label_size.height + baseLine)),
 						  cv::Scalar(255, 255, 255), CV_FILLED);
-
 			cv::putText(img, text, cv::Point(x, y + label_size.height),
 						cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255));
 #endif
-{
-            int topx, topy, bottomx,bottomy;
-            topx = std::max(static_cast<int>(d[3] * img.cols), 0);
-            topx = std::min(topx, img.cols);
-
-            topy = std::max(static_cast<int>(d[4] * img.rows), 0);
-            topy = std::min(topy, img.rows);
-
-            bottomx = std::max(static_cast<int>(d[5] * img.cols), 0);
-            bottomx = std::min(bottomx, img.cols);
-
-            bottomy = std::max(static_cast<int>(d[6] * img.rows), 0);
-            bottomy = std::min(bottomy, img.rows);
-
-			fprintf(fpxml, format_box, 
-			       topx,
-			       topy,
-			       bottomx,
-			       bottomy
-			       );
-}
-
+			fprintf(fpxml, format_box, topx, topy, bottomx, bottomy);
         }
-
-        //getchar();
       }
-			fprintf(fpxml, format_end);
-		    fclose(fpxml);
-#endif
-      imshow("d", img);
+
+	  fprintf(fpxml, format_end);
+	  fclose(fpxml);
+
+      imshow("show", img);
       cv::waitKey();
-      
-      //imwrite("/home/leejohnnie/code/ssd/caffe/examples/images/ssd.jpg", img);
   }
   fclose(pfile);
   fclose(pfileSize);
   return 0;
 }
-#else
-int main(int argc, char** argv) {
-  LOG(FATAL) << "This example requires OpenCV; compile with USE_OPENCV.";
-}
-#endif  // USE_OPENCV
