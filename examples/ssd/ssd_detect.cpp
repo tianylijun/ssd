@@ -464,7 +464,7 @@ int main(int argc, char** argv) {
 		printf("orgsize open error \n");
 		exit(-1);
 	}
-
+//#define SHOW_BOX
   // Process image one by one.
   std::ifstream infile(argv[3]);
   std::string file;
@@ -518,7 +518,6 @@ int main(int argc, char** argv) {
             continue;
 
         {
-#if 1
 			out << "[" << i << "] ";
 			out << d[1] << " ";
 			out << score << " ";
@@ -526,13 +525,6 @@ int main(int argc, char** argv) {
 			out << d[4] << " ";
 			out << d[5] << " ";
 			out << d[6] << std::endl;
-			out << "[" << i << "] ";
-			out << static_cast<int>(d[1]) << " ";
-			out << score << " ";
-			out << static_cast<int>(d[3] * img.cols) << " ";
-			out << static_cast<int>(d[4] * img.rows) << " ";
-			out << static_cast<int>(d[5] * img.cols) << " ";
-			out << static_cast<int>(d[6] * img.rows) << std::endl;
 
 			int topx, topy, bottomx,bottomy;
 			topx = std::max(static_cast<int>(d[3] * img.cols), 1);
@@ -543,6 +535,16 @@ int main(int argc, char** argv) {
 			bottomx = std::min(bottomx, img.cols-1);
 			bottomy = std::max(static_cast<int>(d[6] * img.rows), 1);
 			bottomy = std::min(bottomy, img.rows-1);
+
+			out << "[" << i << "] ";
+			out << static_cast<int>(d[1]) << " ";
+			out << score << " ";
+			out << topx << " ";
+			out << topy << " ";
+			out << bottomx << " ";
+			out << bottomy << std::endl;
+
+#ifdef SHOW_BOX
             /* draw rect */
 			cv::Rect rect = cv::Rect(topx, topy, bottomx - topx, bottomy - topy);
 			cv::rectangle(img, rect, cv::Scalar(0, 255, 0));
@@ -567,9 +569,10 @@ int main(int argc, char** argv) {
 
 	  fprintf(fpxml, format_end);
 	  fclose(fpxml);
-
+#ifdef SHOW_BOX
       imshow("show", img);
       cv::waitKey();
+#endif
   }
   fclose(pfile);
   fclose(pfileSize);
